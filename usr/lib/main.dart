@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -7,114 +8,259 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      debugShowCheckedModeBanner: false,
+      title: 'Screensaver App',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const ScreensaverPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+enum ShapeType { ellipse, rectangle }
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+enum MovementType { stationary, smooth, random }
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+class Shape {
+  ShapeType type;
+  Color color;
+  Rect rect;
+  double dx;
+  double dy;
 
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Shape({
+    required this.type,
+    required this.color,
+    required this.rect,
+    required this.dx,
+    required this.dy,
+  });
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class ScreensaverPage extends StatefulWidget {
+  const ScreensaverPage({super.key});
 
-  void _incrementCounter() {
+  @override
+  State<ScreensaverPage> createState() => _ScreensaverPageState();
+}
+
+class _ScreensaverPageState extends State<ScreensaverPage>
+    with SingleTickerProviderStateMixin {
+  ShapeType _selectedShape = ShapeType.ellipse;
+  Color _selectedColor = Colors.blue;
+  MovementType _selectedMovement = MovementType.smooth;
+  List<Shape> _shapes = [];
+  AnimationController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_updateShapes);
+    _controller!.repeat();
+    // Defer shape initialization until after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeShapes();
+    });
+  }
+
+  void _initializeShapes() {
+    final random = Random();
+    final size = MediaQuery.of(context).size;
+    _shapes = List.generate(20, (index) {
+      final shapeType = _selectedShape;
+      final color = Color.fromRGBO(
+        random.nextInt(256),
+        random.nextInt(256),
+        random.nextInt(256),
+        1,
+      );
+      final rect = Rect.fromLTWH(
+        random.nextDouble() * size.width,
+        random.nextDouble() * size.height,
+        50,
+        50,
+      );
+      return Shape(
+        type: shapeType,
+        color: color,
+        rect: rect,
+        dx: (random.nextDouble() - 0.5) * 4,
+        dy: (random.nextDouble() - 0.5) * 4,
+      );
+    });
+    setState(() {});
+  }
+
+  void _updateShapes() {
+    if (_selectedMovement == MovementType.stationary) return;
+
+    final size = MediaQuery.of(context).size;
+    final random = Random();
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      for (var shape in _shapes) {
+        if (_selectedMovement == MovementType.smooth) {
+          var newRect = shape.rect.translate(shape.dx, shape.dy);
+          if (newRect.left < 0 || newRect.right > size.width) {
+            shape.dx *= -1;
+          }
+          if (newRect.top < 0 || newRect.bottom > size.height) {
+            shape.dy *= -1;
+          }
+          shape.rect = shape.rect.translate(shape.dx, shape.dy);
+        } else if (_selectedMovement == MovementType.random) {
+          shape.rect = shape.rect.translate(
+            (random.nextDouble() - 0.5) * 10,
+            (random.nextDouble() - 0.5) * 10,
+          );
+        }
+      }
     });
   }
 
   @override
+  void dispose() {
+    _controller?.removeListener(_updateShapes);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Screensaver'),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
-          ],
-        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildShapeDropdown(),
+                _buildColorDropdown(),
+                _buildMovementDropdown(),
+              ],
+            ),
+          ),
+          Expanded(
+            child: CustomPaint(
+              painter: ShapePainter(shapes: _shapes),
+              child: Container(),
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  DropdownButton<ShapeType> _buildShapeDropdown() {
+    return DropdownButton<ShapeType>(
+      value: _selectedShape,
+      onChanged: (ShapeType? newValue) {
+        if (newValue != null) {
+          setState(() {
+            _selectedShape = newValue;
+            _updateShapeTypes();
+          });
+        }
+      },
+      items: ShapeType.values.map((ShapeType shape) {
+        return DropdownMenuItem<ShapeType>(
+          value: shape,
+          child: Text(shape.toString().split('.').last),
+        );
+      }).toList(),
+    );
+  }
+
+  void _updateShapeTypes() {
+    for (var shape in _shapes) {
+      shape.type = _selectedShape;
+    }
+  }
+
+  DropdownButton<Color> _buildColorDropdown() {
+    return DropdownButton<Color>(
+      value: _selectedColor,
+      onChanged: (Color? newValue) {
+        if (newValue != null) {
+          setState(() {
+            _selectedColor = newValue;
+            _updateShapeColors();
+          });
+        }
+      },
+      items: [
+        Colors.red,
+        Colors.green,
+        Colors.blue,
+        Colors.yellow,
+        Colors.purple,
+        Colors.orange,
+      ].map((Color color) {
+        return DropdownMenuItem<Color>(
+          value: color,
+          child: Text(color.toString()),
+        );
+      }).toList(),
+    );
+  }
+
+  void _updateShapeColors() {
+    for (var shape in _shapes) {
+      shape.color = _selectedColor;
+    }
+  }
+
+  DropdownButton<MovementType> _buildMovementDropdown() {
+    return DropdownButton<MovementType>(
+      value: _selectedMovement,
+      onChanged: (MovementType? newValue) {
+        if (newValue != null) {
+          setState(() {
+            _selectedMovement = newValue;
+          });
+        }
+      },
+      items: MovementType.values.map((MovementType movement) {
+        return DropdownMenuItem<MovementType>(
+          value: movement,
+          child: Text(movement.toString().split('.').last),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class ShapePainter extends CustomPainter {
+  final List<Shape> shapes;
+
+  ShapePainter({required this.shapes});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    for (var shape in shapes) {
+      paint.color = shape.color;
+      if (shape.type == ShapeType.rectangle) {
+        canvas.drawRect(shape.rect, paint);
+      } else {
+        canvas.drawOval(shape.rect, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
   }
 }
